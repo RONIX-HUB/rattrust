@@ -1,0 +1,250 @@
+local worker_url = "https://keyget.bennettcardiff11.workers.dev/"--bruhhskid
+
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
+local player = Players.LocalPlayer
+repeat task.wait() until player
+
+local BASE = "Galaxy Hub"
+local USERDATA = BASE .. "/Userdata"
+local ACCOUNTS = USERDATA .. "/Accounts"
+
+if not isfolder(BASE) then makefolder(BASE) end
+if not isfolder(USERDATA) then makefolder(USERDATA) end
+if not isfolder(ACCOUNTS) then makefolder(ACCOUNTS) end
+
+local function account_path(username)
+    return ACCOUNTS .. "/" .. username .. ".json"
+end
+
+local function save_account_file(username, password, metadata)
+    local ok, enc = pcall(function()
+        return HttpService:JSONEncode({ username = username, password = password, metadata = metadata })
+    end)
+    if ok and enc then
+        pcall(function() writefile(account_path(username), enc) end)
+    end
+end
+
+local function request(data)
+    data.Headers = data.Headers or {}
+    data.Headers["Content-Type"] = "application/json"
+
+    local function norm(r)
+        if not r then return nil end
+        local code = r.StatusCode or r.statusCode or r.status_code or r.status or 0
+        local body = r.Body or r.body or r.data or r.content or ""
+        return { status = code, body = body, ok = (code >= 200 and code < 300) }
+    end
+
+    if request then
+        local ok, res = pcall(function()
+            return request({
+                Url = data.Url,
+                Method = data.Method,
+                Headers = data.Headers,
+                Body = data.Body
+            })
+        end)
+        if ok and res then return norm(res) end
+    end
+
+    if http_request then
+        local ok, res = pcall(function()
+            return http_request({
+                Url = data.Url,
+                Method = data.Method,
+                Headers = data.Headers,
+                Body = data.Body
+            })
+        end)
+        if ok and res then return norm(res) end
+    end
+--sixsevenrat
+    if syn and syn.request then
+        local ok, res = pcall(function()
+            return syn.request({
+                Url = data.Url,
+                Method = data.Method,
+                Headers = data.Headers,
+                Body = data.Body
+            })
+        end)
+        if ok and res then return norm(res) end
+    end
+
+    --https request
+    if http and http.request then
+        local ok, res = pcall(function()
+            return http.request({
+                url = data.Url,
+                method = data.Method,
+                headers = data.Headers,
+                body = data.Body
+            })
+        end)
+        if ok and res then return norm(res) end
+    end
+
+    return nil
+end
+
+local function api(action, user, pass)
+    local payload
+    if action == "keycheck" then
+        payload = { action = "keycheck", key = tostring(user or "") }
+    else
+        payload = { action = action, username = tostring(user or ""), password = tostring(pass or "") }
+    end
+
+    local ok_enc, encoded = pcall(function() return HttpService:JSONEncode(payload) end)
+    if not ok_enc then return false, { error = "json_encode_failed" } end
+
+    local res = request({ Method = "POST", Url = worker_url, Headers = { ["Content-Type"] = "application/json" }, Body = encoded })
+    if not res then return false, { error = "Failed to contact server" } end
+
+    if not res.ok then
+        local dec_ok, dec = pcall(function() return HttpService:JSONDecode(res.body) end)
+        if dec_ok and type(dec) == "table" then return false, dec end
+        return false, { error = "Server error: " .. tostring(res.status) }
+    end
+
+    local ok_dec, decoded = pcall(function() return HttpService:JSONDecode(res.body) end)
+    if not ok_dec then return false, { error = "Invalid server response" } end
+
+    return true, decoded
+end
+
+--ui ig
+local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/RONIX-HUB/Silent-Hub/refs/heads/main/src"))()
+local Icons = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-Softworks/Nebula-Icon-Library/master/Loader.luau"))()
+local window = UI:CreateWindow({ Name = "Galaxy X Hub", Subtitle = "Welcome " .. player.Name, Icon = 105831277356373, LoadingEnabled = true })
+UI:SetTheme("Nebula")
+local section = window:CreateTabSection("Account Creation / Log In")
+local tab = section:CreateTab({ Name = "Log In", Icon = Icons:GetIcon('view_in_ar', 'Material'), Columns = 3 }, "INDEX")
+tab:BuildThemeGroupbox(1)
+
+local vars = { signupuser = "", signuppass = "", loginuser = "", loginpass = "", key = "", metadata = {
+    created_day = os.date("%A"),
+    created_time = os.date("%I:%M:%S %p"),
+    created_date = os.date("%m/%d/%Y"),
+    logged_in = false
+} }
+
+local function save_metadata()
+    vars.metadata.current_user = vars.loginuser
+end
+
+--login
+local login_box = tab:CreateGroupbox({ Name = "Login", Column = 2 }, "INDEX")
+login_box:CreateInput({
+    Name = "Username",
+    Icon = Icons:GetIcon('text-cursor-input', 'Lucide'),
+    CurrentValue = vars.loginuser or "",
+    PlaceholderText = "Enter username",
+    Enter = true,
+    Callback = function(text) vars.loginuser = text end
+}, "INDEX")
+login_box:CreateInput({
+    Name = "Password",
+    Icon = Icons:GetIcon('text-cursor-input', 'Lucide'),
+    CurrentValue = vars.loginpass or "",
+    PlaceholderText = "Enter password",
+    Enter = true,
+    Callback = function(text) vars.loginpass = text end
+}, "INDEX")
+login_box:CreateButton({
+    Name = "Login",
+    Icon = Icons:GetIcon('check', 'Material'),
+    Callback = function()
+        if vars.loginuser == "" or vars.loginpass == "" then
+            UI:Notification({ Title = "Login Failed", Icon = Icons:GetIcon('error', 'Material'), Content = "Please enter both username and password." }, "INDEX")
+            return
+        end
+        local ok_api, resp = api("login", vars.loginuser, vars.loginpass)
+        if ok_api and resp and resp.success then
+            if isfolder(ACCOUNTS) then
+                for _, file in ipairs(listfiles(ACCOUNTS)) do
+                    if file:sub(-5) == ".json" then
+                        local raw = readfile(file)
+                        local ok, dec = pcall(function() return HttpService:JSONDecode(raw) end)
+                        if ok and dec and dec.metadata then
+                            dec.metadata.logged_in = false
+                            writefile(file, HttpService:JSONEncode(dec))
+                        end
+                    end
+                end
+            end
+            vars.metadata.logged_in = true
+            save_metadata()
+            save_account_file(vars.loginuser, vars.loginpass, vars.metadata)
+
+            UI:Notification({ Title = "Login Success", Icon = Icons:GetIcon('check_circle', 'Material'), Content = resp.msg or ("Welcome " .. vars.loginuser) }, "INDEX")
+        else
+            vars.metadata.logged_in = false
+            save_metadata()
+            UI:Notification({ Title = "Login Failed", Icon = Icons:GetIcon('error', 'Material'), Content = (resp and (resp.error or resp.msg)) or "Invalid username or password." }, "INDEX")
+        end
+    end
+}, "INDEX")
+
+--signup
+local signup_box = tab:CreateGroupbox({ Name = "Sign Up", Column = 2 }, "INDEX")
+signup_box:CreateInput({
+    Name = "Username",
+    Icon = Icons:GetIcon('text-cursor-input', 'Lucide'),
+    CurrentValue = "",
+    PlaceholderText = "Choose username",
+    Enter = true,
+    Callback = function(text) vars.signupuser = text end
+}, "INDEX")
+signup_box:CreateInput({
+    Name = "Password",
+    Icon = Icons:GetIcon('text-cursor-input', 'Lucide'),
+    CurrentValue = "",
+    PlaceholderText = "Choose password",
+    Enter = true,
+    Callback = function(text) vars.signuppass = text end
+}, "INDEX")
+signup_box:CreateButton({
+    Name = "Create Account",
+    Icon = Icons:GetIcon('check', 'Material'),
+    Callback = function()
+        if vars.signupuser == "" or vars.signuppass == "" then
+            UI:Notification({ Title = "Signup Failed", Icon = Icons:GetIcon('error', 'Material'), Content = "Please enter both username and password. API returned 'error code 1'." }, "INDEX")
+            return
+		end
+		if #vars.signuppass < 8 then
+            UI:Notification({ Title = "Signup Failed", Icon = Icons:GetIcon('error', 'Material'), Content = "Password must be at least 8 characters long. API returned 'error code 2'." }, "INDEX")
+            return
+        end
+		if vars.signupuser == "Guest" then
+            UI:Notification({ Title = "Signup Failed", Icon = Icons:GetIcon('error', 'Material'), Content = "Guest is non avaiable user. API returned 'error code 3'." }, "INDEX")
+            return
+        end
+        local ok_api, resp = api("signup", vars.signupuser, vars.signuppass)
+        if ok_api and resp and resp.success then
+            save_account_file(vars.signupuser, vars.signuppass, vars.metadata)
+            UI:Notification({ Title = "Account Created", Icon = Icons:GetIcon('check_circle', 'Material'), Content = resp.msg or "Your account has been created." }, "INDEX")
+        else
+            UI:Notification({ Title = "Signup Failed", Icon = Icons:GetIcon('error', 'Material'), Content = (resp and (resp.error or resp.msg)) or "Failed to create account." }, "INDEX")
+        end
+    end
+}, "INDEX")
+
+--guest
+local guestmode = tab:CreateGroupbox({ Name = "Guest Mode", Column = 2 }, "INDEX")
+guestmode:CreateButton({
+    Name = "Continue as Guest",
+    Icon = Icons:GetIcon("check", "Material"),
+    Callback = function()
+        vars.metadata.logged_in = false
+        save_metadata()
+        UI:Notification({ Title = "Warning", Icon = Icons:GetIcon("person-standing", "Lucide"), Content = "You are continuing as a guest user. Your configurations will not be saved." })
+        task.wait(3)
+    end
+}, "INDEX")
