@@ -1,0 +1,121 @@
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
+
+local player = Players.LocalPlayer
+repeat task.wait() until player
+
+local BASE = "Galaxy Hub"
+local USERDATA = BASE .. "/Userdata"
+local ACCOUNTS = USERDATA .. "/Accounts"
+
+if not isfolder(BASE) then makefolder(BASE) end
+if not isfolder(USERDATA) then makefolder(USERDATA) end
+if not isfolder(ACCOUNTS) then makefolder(ACCOUNTS) end
+
+
+local vars = {
+    username = nil,
+    key = "",
+    metadata = nil
+}
+
+local function find_logged_in_account()
+    if isfolder(ACCOUNTS) then
+        for _, file in ipairs(listfiles(ACCOUNTS)) do
+            if file:sub(-5) == ".json" then
+                local raw = readfile(file)
+                local ok, dec = pcall(function() return HttpService:JSONDecode(raw) end)
+                if ok and dec and dec.metadata and dec.metadata.logged_in then
+                    return dec.username, dec.metadata
+                end
+            end
+        end
+    end
+    return nil, nil
+end
+
+vars.username, vars.metadata = find_logged_in_account()
+if not vars.metadata then
+    vars.metadata = {
+        created_day = os.date("%A"),
+        created_time = os.date("%I:%M:%S %p"),
+        created_date = os.date("%m/%d/%Y"),
+        logged_in = false
+    }
+end
+
+local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/RONIX-HUB/Silent-Hub/refs/heads/main/src"))()
+local Icons = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-Softworks/Nebula-Icon-Library/master/Loader.luau"))()
+
+local window = UI:CreateWindow({
+    Name = "Galaxy X Hub",
+    Subtitle = "Welcome " .. (vars.username or "Guest"),
+    Icon = 105831277356373,
+    LoadingEnabled = true
+})
+UI:SetTheme("Nebula")
+
+local section = window:CreateTabSection("Get Your Key | You are logged in!")
+local tab = section:CreateTab({
+    Name = "Key System",
+    Icon = Icons:GetIcon('key', 'Lucide'),
+    Columns = 3,
+}, "INDEX")
+tab:BuildThemeGroupbox(1)
+
+local key_box = tab:CreateGroupbox({ Name = "Key System", Column = 2 }, "INDEX")
+key_box:CreateInput({
+    Name = "Key",
+    Icon = Icons:GetIcon('text-cursor-input', 'Lucide'),
+    CurrentValue = vars.key or "",
+    PlaceholderText = "GX-XXXX-XXXX-XXXX",
+    Enter = true,
+    Callback = function(text)
+        vars.key = text
+    end
+}, "INDEX")
+
+key_box:CreateButton({
+    Name = "Key Save",
+    Icon = Icons:GetIcon('check', 'Material'),
+    Callback = function()
+        writefile("GX-Key.txt", tostring(vars.key or ""))
+        UI:Notification({
+            Title = "Key Saved",
+            Icon = Icons:GetIcon('check_circle', 'Material'),
+            Content = "Your key has been saved successfully.",
+        }, "INDEX")
+    end
+}, "INDEX")
+
+
+local signout = tab:CreateGroupbox({ Name = "Sign Out", Column = 2 }, "INDEX")
+signout:CreateButton({
+    Name = "Sign Out",
+    Icon = Icons:GetIcon('check', 'Material'),
+    Callback = function()
+        if vars.username then
+            local path = ACCOUNTS .. "/" .. vars.username .. ".json"
+            if isfile(path) then
+                local raw = readfile(path)
+                local ok, dec = pcall(function() return HttpService:JSONDecode(raw) end)
+                if ok and dec and dec.metadata then
+                    dec.metadata.logged_in = false
+                    writefile(path, HttpService:JSONEncode(dec))
+                end
+            end
+            vars.username = nil
+            vars.metadata.logged_in = false
+        end
+        UI:Notification({
+            Title = "Signed Out",
+            Icon = Icons:GetIcon('check_circle', 'Material'),
+            Content = "You have been logged out.",
+        }, "INDEX")
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/RONIX-HUB/rattrust/refs/heads/main/real"))()
+    end
+}, "INDEX")
