@@ -55,7 +55,7 @@ local window = UI:CreateWindow({
     Name = "Galaxy X Hub",
     Subtitle = "Welcome " .. (vars.username or "Guest"),
     Icon = 105831277356373,
-    LoadingEnabled = true
+    LoadingEnabled = false
 })
 UI:SetTheme("Nebula")
 
